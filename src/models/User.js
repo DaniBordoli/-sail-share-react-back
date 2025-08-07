@@ -22,7 +22,10 @@ const UserSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    required: true,
+    required: function() {
+      // Solo requerido si no es un usuario OAuth (Google o Facebook)
+      return !this.googleId && !this.facebookId;
+    },
     trim: true
   },
   password: {
@@ -47,6 +50,17 @@ const UserSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  // IDs para OAuth
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+  facebookId: {
+    type: String,
+    unique: true,
+    sparse: true
   }
 }, {
   timestamps: true // Añade createdAt y updatedAt automáticamente

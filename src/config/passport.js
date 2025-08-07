@@ -1,0 +1,102 @@
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const FacebookStrategy = require('passport-facebook').Strategy;
+const User = require('../models/User');
+
+// Verificar que las variables de entorno estén disponibles
+if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+  console.error('Error: GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET deben estar definidos en el archivo .env');
+  process.exit(1);
+}
+
+if (!process.env.FACEBOOK_APP_ID || !process.env.FACEBOOK_APP_SECRET) {
+  console.error('Error: FACEBOOK_APP_ID y FACEBOOK_APP_SECRET deben estar definidos en el archivo .env');
+  process.exit(1);
+}
+
+// Configuración de la estrategia de Google
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: "/api/auth/google/callback"
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    // Verificar si el usuario ya existe
+    let user = await User.findOne({ email: profile.emails[0].value });
+    
+    if (user) {
+      return done(null, user);
+    }
+    
+    // Crear nuevo usuario
+    user = new User({
+      firstName: profile.name.givenName || 'Usuario',
+      lastName: profile.name.familyName || 'Google',
+      email: profile.emails[0].value,
+      phone: '', // Campo vacío para usuarios OAuth
+      password: 'oauth_user_' + Date.now(), // Password único para usuarios OAuth
+      googleId: profile.id,
+      isVerified: true // Los usuarios de Google ya están verificados
+    });
+    
+    await user.save();
+    return done(null, user);
+  } catch (error) {
+    return done(error, null);
+  }
+}));
+
+// Configuración de la estrategia de Facebook
+passport.use(new FacebookStrategy({
+  clientID: process.env.FACEBOOK_APP_ID,
+  clientSecret: process.env.FACEBOOK_APP_SECRET,
+  callbackURL: "/api/auth/facebook/callback",
+  profileFields: ['id', 'emails', 'name', 'displayName']
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    // Verificar si el usuario ya existe por email
+    let user = await User.findOne({ email: profile.emails?.[0]?.value });
+    
+    if (user) {
+      // Si el usuario existe pero no tiene facebookId, agregarlo
+      if (!user.facebookId) {
+        user.facebookId = profile.id;
+        await user.save();
+      }
+      return done(null, user);
+    }
+    
+    // Crear nuevo usuario
+    user = new User({
+      firstName: profile.name?.givenName || profile.displayName?.split(' ')[0] || 'Usuario',
+      lastName: profile.name?.familyName || profile.displayName?.split(' ').slice(1).join(' ') || 'Facebook',
+      email: profile.emails?.[0]?.value || `facebook_${profile.id}@facebook.com`, // Email por defecto si no está disponible
+      phone: '', // Campo vacío para usuarios OAuth
+      password: 'oauth_user_' + Date.now(), // Password único para usuarios OAuth
+      facebookId: profile.id,
+      isVerified: true // Los usuarios de Facebook ya están verificados
+    });
+    
+    await user.save();
+    return done(null, user);
+  } catch (error) {
+    return done(error, null);
+  }
+}));
+
+// Para JWT no necesitamos serialización de sesiones
+// Estas funciones quedan por compatibilidad pero no se usan
+passport.serializeUser((user, done) => {
+  done(null, user._id);
+});
+
+passport.deserializeUser(async (id, done) => {
+  try {
+    const user = await User.findById(id);
+    done(null, user);
+  } catch (error) {
+    done(error, null);
+  }
+});
+
+module.exports = passport;
