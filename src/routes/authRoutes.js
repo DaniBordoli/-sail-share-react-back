@@ -8,6 +8,7 @@ const {
   logout, 
   getCurrentUser 
 } = require('../controllers/authController');
+const { verifyJWT } = require('../middleware/auth');
 
 // Rutas de autenticación con Google
 router.get('/google', googleAuth);
@@ -20,7 +21,7 @@ router.get('/facebook/callback', facebookCallback);
 // Ruta para logout
 router.post('/logout', logout);
 
-// Ruta para obtener usuario actual
-router.get('/me', getCurrentUser);
+// Ruta para obtener usuario actual (protegida)
+router.get('/me', verifyJWT, getCurrentUser);
 
 module.exports = router;

@@ -58,9 +58,9 @@ exports.logout = (req, res) => {
 
 // Verificar si el usuario está autenticado
 exports.getCurrentUser = (req, res) => {
-  // Con JWT, la verificación se hace mediante middleware
-  // Este endpoint necesitaría un middleware de JWT para funcionar
-  res.status(401).json({ 
-    message: 'Este endpoint requiere autenticación JWT - implementar middleware' 
-  });
+  // Requiere middleware verifyJWT que adjunta req.user
+  if (!req.user) {
+    return res.status(401).json({ message: 'No autorizado' });
+  }
+  return res.json({ user: req.user });
 };
