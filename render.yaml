@@ -1,0 +1,41 @@
+previews:
+  generation: automatic
+
+services:
+  - type: web
+    name: sail-share-back
+    runtime: node
+    repo: https://github.com/DaniBordoli/-sail-share-react-back
+    branch: master
+    buildCommand: npm ci
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGINS
+        value: '["https://sail-share-front.onrender.com","https://sail-share-front-pr-*.onrender.com"]'
+      - key: CLIENT_URL
+        fromService:
+          type: web
+          name: sail-share-front
+          envVarKey: RENDER_EXTERNAL_URL
+        previewValue: "https://sail-share-front-pr-{{ PR_NUMBER }}.onrender.com"
+
+  - type: web
+    name: sail-share-front
+    runtime: static
+    repo: https://github.com/DaniBordoli/sail-share-react
+    branch: main
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: sail-share-back
+          envVarKey: RENDER_EXTERNAL_URL
+        previewValue: "https://sail-share-back-pr-{{ PR_NUMBER }}.onrender.com"
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
