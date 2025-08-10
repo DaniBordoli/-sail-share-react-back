@@ -6,7 +6,7 @@ services:
     name: sail-share-back
     runtime: node
     repo: https://github.com/DaniBordoli/-sail-share-react-back
-    branch: master
+    branch: main
     buildCommand: npm ci
     startCommand: npm start
     envVars:
