@@ -53,9 +53,9 @@ exports.registerUser = async (req, res) => {
     try {
       await sendMail({
         to: email,
-        subject: 'Verifica tu cuenta - NavBoat',
+        subject: 'Verifica tu cuenta - boatbnb',
         html: `
-          <h1>Bienvenido/a a NavBoat</h1>
+          <h1>Bienvenido/a a boatbnb</h1>
           <p>Para activar tu cuenta, verifica tu correo haciendo clic en el siguiente botón:</p>
           <p><a href="${verifyUrl}" style="display:inline-block;background:#0ea5e9;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none">Verificar mi cuenta</a></p>
           <p>O copia y pega este enlace en tu navegador: <br/> ${verifyUrl}</p>
@@ -136,7 +136,7 @@ exports.resendVerification = async (req, res) => {
       : `${backendBase}/api/users/verify-email?token=${token}`;
     await sendMail({
       to: email,
-      subject: 'Reenviar verificación - NavBoat',
+      subject: 'Reenviar verificación - boatbnb',
       html: `
         <p>Haz clic para verificar tu cuenta:</p>
         <p><a href="${verifyUrl}">Verificar mi cuenta</a></p>
@@ -195,10 +195,14 @@ exports.loginUser = async (req, res) => {
     const userResponse = user.toObject();
     delete userResponse.password;
 
+    // Generar JWT para sesiones con email/contraseña (coincide con Google flow que guarda authToken)
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '7d' });
+
     res.json({
       success: true,
       message: 'Login exitoso',
-      data: userResponse
+      data: userResponse,
+      token
     });
   } catch (error) {
     res.status(500).json({
