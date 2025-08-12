@@ -21,7 +21,7 @@ async function sendMail({ to, subject, html, from }) {
     console.log('[EMAIL:FALLBACK] HTML:', html);
     return { accepted: [to], messageId: 'fallback' };
   }
-  const info = await transporter.sendMail({ from: from || process.env.MAIL_FROM || 'no-reply@navboat.com', to, subject, html });
+  const info = await transporter.sendMail({ from: from || process.env.MAIL_FROM || 'no-reply@boatbnb.com', to, subject, html });
   return info;
 }
 
