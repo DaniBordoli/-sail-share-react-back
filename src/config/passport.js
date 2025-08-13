@@ -17,11 +17,24 @@ if (!process.env.FACEBOOK_APP_ID || !process.env.FACEBOOK_APP_SECRET) {
   process.exit(1);
 }
 
+// Construir callback URL de Google y loguear en desarrollo
+const googleCallbackURL = BASE_URL ? `${BASE_URL}/api/auth/google/callback` : "/api/auth/google/callback";
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    console.log('🔎 Google OAuth config (dev):', {
+      BASE_URL,
+      googleCallbackURL,
+      usesBaseUrl: Boolean(BASE_URL),
+      clientIdSuffix: process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.slice(-6) : undefined
+    });
+  } catch (_) {}
+}
+
 // Configuración de la estrategia de Google
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: BASE_URL ? `${BASE_URL}/api/auth/google/callback` : "/api/auth/google/callback"
+  callbackURL: googleCallbackURL
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     // Verificar si el usuario ya existe
