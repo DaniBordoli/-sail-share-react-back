@@ -9,6 +9,7 @@ const passport = require('./config/passport');
 // Importar rutas
 const userRoutes = require('./routes/userRoutes');
 const authRoutes = require('./routes/authRoutes');
+const boatsRoutes = require('./routes/boatsRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -102,13 +103,16 @@ app.get('/', (req, res) => {
   });
 });
 
-// Rutas para barcos
-app.get('/api/boats', (req, res) => {
-  res.json({ message: 'Endpoint para obtener barcos' });
+// Rutas para barcos reales
+app.use('/api/boats', boatsRoutes);
+
+// Placeholders (mover o eliminar cuando se implementen completamente)
+app.get('/api/boats-placeholder', (req, res) => {
+  res.json({ message: 'Endpoint placeholder para obtener barcos' });
 });
 
-app.get('/api/boats/:id', (req, res) => {
-  res.json({ message: `Endpoint para obtener barco con ID: ${req.params.id}` });
+app.get('/api/boats-placeholder/:id', (req, res) => {
+  res.json({ message: `Endpoint placeholder para obtener barco con ID: ${req.params.id}` });
 });
 
 // Usar rutas de usuarios
