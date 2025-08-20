@@ -42,6 +42,15 @@ const UserSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // Avatar del usuario
+  avatar: {
+    type: String, // URL pública (Cloudinary)
+    trim: true
+  },
+  avatarPublicId: {
+    type: String, // Public ID en Cloudinary para manejar reemplazos/eliminaciones
+    trim: true
+  },
   // Estado de verificación
   isVerified: {
     type: Boolean,
