@@ -2,6 +2,28 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { sendMail } = require('../utils/email');
+const cloudinary = require('cloudinary').v2;
+
+// Configuración de Cloudinary (usa variables separadas o CLOUDINARY_URL)
+try {
+  const hasUrl = !!process.env.CLOUDINARY_URL;
+  const hasSeparate = process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET;
+  if (hasUrl) {
+    // CLOUDINARY_URL toma prioridad
+    cloudinary.config({ secure: true });
+  } else if (hasSeparate) {
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+      secure: true,
+    });
+  } else {
+    console.warn('[cloudinary] configuración no encontrada');
+  }
+} catch (e) {
+  console.warn('Cloudinary no pudo inicializarse:', e?.message || e);
+}
 
 // Registrar un nuevo usuario (con verificación por email)
 exports.registerUser = async (req, res) => {
@@ -83,6 +105,64 @@ exports.registerUser = async (req, res) => {
       message: 'Error al crear usuario',
       error: error.message
     });
+  }
+};
+
+// Subida de avatar del usuario a Cloudinary
+exports.uploadUserAvatar = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // logs reducidos: sin trazas de request ni archivo
+
+    if (!req.user || String(req.user._id) !== String(userId)) {
+      return res.status(403).json({ success: false, message: 'No tienes permiso para actualizar este usuario' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Falta el archivo (field name: file)' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+
+    const folder = process.env.CLOUDINARY_FOLDER || 'avatars';
+    const publicIdBase = `user_${userId}`;
+
+    // Subir mediante stream (multer en memoria)
+    const uploadResult = await new Promise((resolve, reject) => {
+      const disableTransform = String(process.env.CLOUDINARY_DISABLE_TRANSFORM || '').toLowerCase() === 'true';
+      const uploadOptions = {
+        folder,
+        public_id: `${publicIdBase}_${Date.now()}`,
+        overwrite: true,
+        resource_type: 'image',
+        ...(disableTransform
+          ? {}
+          : { transformation: [{ width: 512, height: 512, crop: 'fill', gravity: 'face' }] }
+        ),
+      };
+      // logs reducidos: sin aviso de opciones mínimas
+      const stream = cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      });
+      stream.end(req.file.buffer);
+    });
+
+    user.avatar = uploadResult.secure_url;
+    user.avatarPublicId = uploadResult.public_id;
+    await user.save();
+
+    const responsePayload = {
+      success: true,
+      message: 'Avatar actualizado',
+      data: { avatarUrl: user.avatar, publicId: user.avatarPublicId },
+    };
+    return res.json(responsePayload);
+  } catch (error) {
+    console.error('[avatar] error:', error?.message || error);
+    return res.status(500).json({ success: false, message: 'Error subiendo avatar', error: error.message });
   }
 };
 
@@ -259,7 +339,7 @@ exports.getUserById = async (req, res) => {
 // Actualizar usuario
 exports.updateUser = async (req, res) => {
   try {
-    const { dniOrLicense, experienceDeclaration, firstName, lastName, phone } = req.body;
+    const { dniOrLicense, experienceDeclaration, firstName, lastName, phone, avatar } = req.body;
     const userId = req.params.id;
 
     const user = await User.findById(userId);
@@ -294,6 +374,9 @@ exports.updateUser = async (req, res) => {
     }
     if (phone !== undefined) {
       user.phone = phone;
+    }
+    if (avatar !== undefined) {
+      user.avatar = avatar;
     }
 
     const updatedUser = await user.save();

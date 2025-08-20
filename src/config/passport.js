@@ -2,6 +2,12 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const FacebookStrategy = require('passport-facebook').Strategy;
 const User = require('../models/User');
+const cloudinary = require('cloudinary').v2;
+
+// Inicializar Cloudinary (usa CLOUDINARY_URL si está disponible)
+try {
+  cloudinary.config({ secure: true });
+} catch (_) {}
 
 // Base URL para construir callbacks en producción/preview
 const BASE_URL = process.env.PUBLIC_BACKEND_URL || process.env.RENDER_EXTERNAL_URL || '';
@@ -19,16 +25,7 @@ if (!process.env.FACEBOOK_APP_ID || !process.env.FACEBOOK_APP_SECRET) {
 
 // Construir callback URL de Google y loguear en desarrollo
 const googleCallbackURL = BASE_URL ? `${BASE_URL}/api/auth/google/callback` : "/api/auth/google/callback";
-if (process.env.NODE_ENV !== 'production') {
-  try {
-    console.log('🔎 Google OAuth config (dev):', {
-      BASE_URL,
-      googleCallbackURL,
-      usesBaseUrl: Boolean(BASE_URL),
-      clientIdSuffix: process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.slice(-6) : undefined
-    });
-  } catch (_) {}
-}
+// (Logs de desarrollo removidos)
 
 // Configuración de la estrategia de Google
 passport.use(new GoogleStrategy({
@@ -37,10 +34,37 @@ passport.use(new GoogleStrategy({
   callbackURL: googleCallbackURL
 }, async (accessToken, refreshToken, profile, done) => {
   try {
+    // (Logs de desarrollo removidos)
+
     // Verificar si el usuario ya existe
     let user = await User.findOne({ email: profile.emails[0].value });
     
     if (user) {
+      // Si no tiene avatar, intentar importarlo desde Google
+      if (!user.avatar) {
+        const photo = profile.photos && profile.photos[0] && profile.photos[0].value;
+        const hiRes = photo ? photo.replace(/=s\d+-c$/, '=s512-c') : undefined;
+        if (photo) {
+          try {
+            const up = await cloudinary.uploader.upload(hiRes || photo, {
+              folder: process.env.CLOUDINARY_FOLDER || 'avatars',
+              public_id: `user_${user._id}`,
+              overwrite: true,
+              resource_type: 'image',
+            });
+            user.avatar = up.secure_url;
+            user.avatarPublicId = up.public_id;
+            await user.save();
+          } catch (e) {
+            // No bloquear login si falla avatar: guardar la URL de Google como fallback
+            console.warn('[oauth:google] avatar upload failed (existing user):', e?.message || e);
+            try {
+              user.avatar = hiRes || photo;
+              await user.save();
+            } catch (_) {}
+          }
+        }
+      }
       return done(null, user);
     }
     
@@ -56,6 +80,31 @@ passport.use(new GoogleStrategy({
     });
     
     await user.save();
+    // Intentar importar avatar de Google para nuevo usuario (no obligatorio)
+    const photo = profile.photos && profile.photos[0] && profile.photos[0].value;
+    const hiRes = photo ? photo.replace(/=s\d+-c$/, '=s512-c') : undefined;
+    try {
+      if (photo) {
+        const up = await cloudinary.uploader.upload(hiRes || photo, {
+          folder: process.env.CLOUDINARY_FOLDER || 'avatars',
+          public_id: `user_${user._id}`,
+          overwrite: true,
+          resource_type: 'image',
+        });
+        user.avatar = up.secure_url;
+        user.avatarPublicId = up.public_id;
+        await user.save();
+      }
+    } catch (e) {
+      // Ignorar fallo de avatar. Fallback: guardar URL de Google
+      console.warn('[oauth:google] avatar upload failed (new user):', e?.message || e);
+      try {
+        if (photo) {
+          user.avatar = hiRes || photo;
+          await user.save();
+        }
+      } catch (_) {}
+    }
     return done(null, user);
   } catch (error) {
     return done(error, null);

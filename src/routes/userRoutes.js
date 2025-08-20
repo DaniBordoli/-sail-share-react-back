@@ -7,9 +7,14 @@ const {
   getUserById, 
   updateUser,
   verifyEmail,
-  resendVerification
+  resendVerification,
+  uploadUserAvatar
 } = require('../controllers/userController');
 const { verifyJWT } = require('../middleware/auth');
+const multer = require('multer');
+
+// Usar almacenamiento en memoria para pasar el buffer a Cloudinary
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Ruta para registrar usuario
 router.post('/register', registerUser);
@@ -29,5 +34,9 @@ router.get('/:id', getUserById);
 
 // Ruta para actualizar usuario (protegida)
 router.put('/:id', verifyJWT, updateUser);
+
+// Ruta para subir avatar (protegida)
+// Field name esperado: 'file'
+router.post('/:id/avatar', verifyJWT, upload.single('file'), uploadUserAvatar);
 
 module.exports = router;
