@@ -78,6 +78,22 @@ const UserSchema = new mongoose.Schema({
     type: String,
     unique: true,
     sparse: true
+  },
+  // Rol y administración
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user'
+  },
+  // Validación de licencia
+  licenseStatus: {
+    type: String,
+    enum: ['none', 'pending', 'approved', 'rejected'],
+    default: 'none'
+  },
+  licenseUrl: {
+    type: String,
+    trim: true
   }
 }, {
   timestamps: true // Añade createdAt y updatedAt automáticamente

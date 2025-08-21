@@ -10,6 +10,8 @@ const passport = require('./config/passport');
 const userRoutes = require('./routes/userRoutes');
 const authRoutes = require('./routes/authRoutes');
 const boatsRoutes = require('./routes/boatsRoutes');
+const validationRoutes = require('./routes/validationRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -120,6 +122,12 @@ app.use('/api/users', userRoutes);
 
 // Usar rutas de autenticación
 app.use('/api/auth', authRoutes);
+
+// Validación de perfil (licencias)
+app.use('/api/validation', validationRoutes);
+
+// Rutas de administración
+app.use('/api/admin', adminRoutes);
 
 // Middleware para manejar rutas no encontradas
 app.use('*', (req, res) => {
