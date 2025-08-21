@@ -30,4 +30,15 @@ const verifyJWT = async (req, res, next) => {
   }
 };
 
-module.exports = { verifyJWT };
+// Middleware para requerir rol admin (role === 'admin')
+const requireAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'No autorizado' });
+  }
+  if (req.user.role === 'admin') {
+    return next();
+  }
+  return res.status(403).json({ message: 'Requiere privilegios de administrador' });
+};
+
+module.exports = { verifyJWT, requireAdmin };
