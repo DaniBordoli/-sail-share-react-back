@@ -12,6 +12,7 @@ const authRoutes = require('./routes/authRoutes');
 const boatsRoutes = require('./routes/boatsRoutes');
 const validationRoutes = require('./routes/validationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const geoapifyRoutes = require('./routes/geoapifyRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -128,6 +129,9 @@ app.use('/api/validation', validationRoutes);
 
 // Rutas de administración
 app.use('/api/admin', adminRoutes);
+
+// Proxy Geoapify (oculta API key y permite caching futuro)
+app.use('/api/geoapify', geoapifyRoutes);
 
 // Middleware para manejar rutas no encontradas
 app.use('*', (req, res) => {

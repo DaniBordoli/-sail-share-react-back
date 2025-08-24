@@ -23,9 +23,35 @@ const BoatSchema = new mongoose.Schema(
 
     photos: { type: [String], validate: [(arr) => arr.length > 0, 'At least one photo required'] },
 
+    // Geolocalización
+    latitude: { type: Number, required: true, min: -90, max: 90 },
+    longitude: { type: Number, required: true, min: -180, max: 180 },
+    addressFormatted: { type: String, required: true, trim: true },
+
+    // GeoJSON point para consultas geoespaciales
+    location: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number], // [lon, lat]
+        validate: {
+          validator: function (v) {
+            return Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === 'number');
+          },
+          message: 'coordinates inválidas',
+        },
+      },
+    },
+
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
 );
+
+// Índice 2dsphere para campo GeoJSON
+BoatSchema.index({ location: '2dsphere' });
 
 module.exports = mongoose.model('Boat', BoatSchema);

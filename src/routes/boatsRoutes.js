@@ -1,11 +1,12 @@
 const express = require('express');
 const { verifyJWT } = require('../middleware/auth');
-const { getMyBoats, createBoat, updateBoat, deleteBoat, toggleActive, listPublicBoats, getBoatPublic } = require('../controllers/boatsController');
+const { getMyBoats, createBoat, updateBoat, deleteBoat, toggleActive, listPublicBoats, listBoatsNear, getBoatPublic } = require('../controllers/boatsController');
 
 const router = express.Router();
 
 // Públicos
 router.get('/', listPublicBoats);
+router.get('/near', listBoatsNear);
 
 // Requiere autenticación (debe ir antes del paramétrico :id para no colisionar)
 router.get('/mine', verifyJWT, getMyBoats);

@@ -6,7 +6,9 @@ const phoneRegex = /^[+]?\d[\d\s()-]{6,}$/;
 
 const validateBoatPayload = (b) => {
   const required = [
-    'name','rentalTypes','area','boatType','brand','model','buildYear','capacity','enginePower','length','contactNumber','city','description','price','priceUnit','photos'
+    'name','rentalTypes','area','boatType','brand','model','buildYear','capacity','enginePower','length','contactNumber','city','description','price','priceUnit','photos',
+    // geolocalización
+    'latitude','longitude','addressFormatted'
   ];
   for (const k of required) {
     if (b[k] === undefined || b[k] === null || (typeof b[k] === 'string' && !b[k].trim())) {
@@ -22,6 +24,11 @@ const validateBoatPayload = (b) => {
     const v = Number(b[nk]);
     if (Number.isNaN(v) || v <= 0) return `Campo numérico inválido o no positivo: ${nk}`;
   }
+  // Validación de coordenadas
+  const lat = Number(b.latitude);
+  const lon = Number(b.longitude);
+  if (Number.isNaN(lat) || lat < -90 || lat > 90) return 'Latitud inválida';
+  if (Number.isNaN(lon) || lon < -180 || lon > 180) return 'Longitud inválida';
   if (!phoneRegex.test(String(b.contactNumber))) return 'Número de contacto inválido';
   return null;
 };
@@ -59,7 +66,18 @@ exports.updateBoat = async (req, res) => {
       price: payload.price !== undefined ? Number(payload.price) : boat.price,
       priceUnit: payload.priceUnit ?? boat.priceUnit,
       photos: payload.photos ?? boat.photos,
+      latitude: payload.latitude !== undefined ? Number(payload.latitude) : boat.latitude,
+      longitude: payload.longitude !== undefined ? Number(payload.longitude) : boat.longitude,
+      addressFormatted: payload.addressFormatted !== undefined ? String(payload.addressFormatted) : boat.addressFormatted,
     });
+
+    // Mantener GeoJSON location sincronizado
+    if (typeof boat.longitude === 'number' && typeof boat.latitude === 'number') {
+      boat.location = {
+        type: 'Point',
+        coordinates: [boat.longitude, boat.latitude], // [lon, lat]
+      };
+    }
 
     const saved = await boat.save();
     return res.json({ success: true, message: 'Embarcación actualizada', data: saved });
@@ -128,6 +146,40 @@ exports.getMyBoats = async (req, res) => {
   }
 };
 
+// GET /api/boats/near?north=&south=&east=&west=&limit=100
+// Devuelve embarcaciones activas dentro de un bounding box (rectángulo del mapa)
+exports.listBoatsNear = async (req, res) => {
+  try {
+    const north = Number(req.query.north);
+    const south = Number(req.query.south);
+    const east = Number(req.query.east);
+    const west = Number(req.query.west);
+    if ([north, south, east, west].some((v) => Number.isNaN(v))) {
+      return res.status(400).json({ success: false, message: 'Parámetros inválidos: north, south, east, west son requeridos' });
+    }
+    if (north < -90 || north > 90 || south < -90 || south > 90 || east < -180 || east > 180 || west < -180 || west > 180) {
+      return res.status(400).json({ success: false, message: 'Rangos de coordenadas inválidos' });
+    }
+
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit || '100', 10)));
+
+    const items = await Boat.find({
+      isActive: true,
+      location: {
+        $geoWithin: {
+          $box: [[west, south], [east, north]],
+        },
+      },
+    })
+      .limit(limit)
+      .lean();
+
+    return res.json({ success: true, data: items });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Error en búsqueda geoespacial', error: error.message });
+  }
+};
+
 // POST /api/boats
 exports.createBoat = async (req, res) => {
   try {
@@ -166,8 +218,17 @@ exports.createBoat = async (req, res) => {
       price: Number(payload.price),
       priceUnit: payload.priceUnit,
       photos: payload.photos,
+      latitude: Number(payload.latitude),
+      longitude: Number(payload.longitude),
+      addressFormatted: String(payload.addressFormatted),
       isActive: true,
     });
+
+    // Asignar GeoJSON location desde lat/lng
+    boat.location = {
+      type: 'Point',
+      coordinates: [boat.longitude, boat.latitude],
+    };
 
     const saved = await boat.save();
     return res.status(201).json({ success: true, message: 'Embarcación creada', data: saved });
