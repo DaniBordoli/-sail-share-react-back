@@ -46,7 +46,21 @@ const BoatSchema = new mongoose.Schema(
       },
     },
 
+    // Publicación / estado
     isActive: { type: Boolean, default: true },
+    status: { type: String, enum: ['draft','pending_review','approved','rejected'], default: 'draft', index: true },
+    submittedAt: { type: Date },
+    reviewedAt: { type: Date },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    reviewNotes: { type: String },
+    audit: [
+      {
+        action: { type: String, enum: ['submit','approve','reject'], required: true },
+        by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        at: { type: Date, default: Date.now },
+        notes: { type: String },
+      },
+    ],
   },
   { timestamps: true }
 );
