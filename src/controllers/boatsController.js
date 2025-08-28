@@ -33,6 +33,36 @@ const validateBoatPayload = (b) => {
   return null;
 };
 
+// POST /api/boats/:id/submit
+// Cambia estado de draft|rejected -> pending_review (solo dueño)
+exports.submitForReview = async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ success: false, message: 'No autorizado' });
+    const boat = await Boat.findById(req.params.id);
+    if (!boat) return res.status(404).json({ success: false, message: 'Embarcación no encontrada' });
+    if (String(boat.ownerId) !== String(req.user._id)) {
+      return res.status(403).json({ success: false, message: 'No tienes permisos para este barco' });
+    }
+    if (!['draft','rejected'].includes(boat.status)) {
+      return res.status(400).json({ success: false, message: 'El barco no puede enviarse en su estado actual' });
+    }
+
+    // Validar mínimos antes de enviar
+    const validationError = validateBoatPayload(boat.toObject());
+    if (validationError) return res.status(400).json({ success: false, message: `Faltan datos: ${validationError}` });
+
+    boat.status = 'pending_review';
+    boat.submittedAt = new Date();
+    boat.reviewNotes = undefined;
+    boat.audit = boat.audit || [];
+    boat.audit.push({ action: 'submit', by: req.user._id, at: new Date() });
+    const saved = await boat.save();
+    return res.json({ success: true, message: 'Enviado a validación', data: saved });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Error enviando a validación', error: error.message });
+  }
+};
+
 // PUT /api/boats/:id
 exports.updateBoat = async (req, res) => {
   try {
@@ -165,6 +195,7 @@ exports.listBoatsNear = async (req, res) => {
 
     const items = await Boat.find({
       isActive: true,
+      status: 'approved',
       location: {
         $geoWithin: {
           $box: [[west, south], [east, north]],
@@ -246,7 +277,7 @@ exports.listPublicBoats = async (req, res) => {
     const sort = String(req.query.sort || 'createdAt');
     const order = String(req.query.order || 'desc').toLowerCase() === 'asc' ? 1 : -1;
 
-    const filter = { isActive: true };
+    const filter = { isActive: true, status: 'approved' };
     const total = await Boat.countDocuments(filter);
     const items = await Boat.find(filter)
       .sort({ [sort]: order })
@@ -264,7 +295,7 @@ exports.listPublicBoats = async (req, res) => {
 exports.getBoatPublic = async (req, res) => {
   try {
     const boat = await Boat.findById(req.params.id).lean();
-    if (!boat || !boat.isActive) {
+    if (!boat || !boat.isActive || boat.status !== 'approved') {
       return res.status(404).json({ success: false, message: 'Embarcación no encontrada' });
     }
     return res.json({ success: true, data: boat });

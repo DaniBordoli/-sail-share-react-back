@@ -1,6 +1,6 @@
 const express = require('express');
 const { verifyJWT } = require('../middleware/auth');
-const { getMyBoats, createBoat, updateBoat, deleteBoat, toggleActive, listPublicBoats, listBoatsNear, getBoatPublic } = require('../controllers/boatsController');
+const { getMyBoats, createBoat, updateBoat, deleteBoat, toggleActive, listPublicBoats, listBoatsNear, getBoatPublic, submitForReview } = require('../controllers/boatsController');
 
 const router = express.Router();
 
@@ -14,6 +14,7 @@ router.post('/', verifyJWT, createBoat);
 router.put('/:id', verifyJWT, updateBoat);
 router.delete('/:id', verifyJWT, deleteBoat);
 router.patch('/:id/status', verifyJWT, toggleActive);
+router.post('/:id/submit', verifyJWT, submitForReview);
 
 // Público por id (después de '/mine')
 router.get('/:id', getBoatPublic);
