@@ -85,6 +85,18 @@ const UserSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user'
   },
+  // Reputación (opcional)
+  rating: {
+    type: Number,
+    min: 0,
+    max: 5,
+    default: 0
+  },
+  ratingCount: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
   // Validación de licencia
   licenseStatus: {
     type: String,
@@ -94,7 +106,9 @@ const UserSchema = new mongoose.Schema({
   licenseUrl: {
     type: String,
     trim: true
-  }
+  },
+  // Favoritos del usuario (referencias a barcos)
+  favorites: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Boat' }]
 }, {
   timestamps: true // Añade createdAt y updatedAt automáticamente
 });
