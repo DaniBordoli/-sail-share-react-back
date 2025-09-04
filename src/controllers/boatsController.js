@@ -1,4 +1,6 @@
 const Boat = require('../models/Boat');
+const User = require('../models/User');
+const Review = require('../models/Review');
 
 // Validations
 const currentYear = new Date().getFullYear();
@@ -6,7 +8,7 @@ const phoneRegex = /^[+]?\d[\d\s()-]{6,}$/;
 
 const validateBoatPayload = (b) => {
   const required = [
-    'name','rentalTypes','area','boatType','brand','model','buildYear','capacity','enginePower','length','contactNumber','city','description','price','priceUnit','photos',
+    'name','rentalTypes','boatType','brand','model','buildYear','capacity','enginePower','length','contactNumber','city','description','price','priceUnit','photos',
     // geolocalización
     'latitude','longitude','addressFormatted'
   ];
@@ -63,6 +65,75 @@ exports.submitForReview = async (req, res) => {
   }
 };
 
+// GET /api/boats/:id/reviews?page=1&limit=10
+exports.listBoatReviews = async (req, res) => {
+  try {
+    const boatId = req.params.id;
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '10', 10)));
+
+    // total y promedio
+    const [agg] = await Review.aggregate([
+      { $match: { boatId: new (require('mongoose')).Types.ObjectId(boatId) } },
+      { $group: { _id: '$boatId', average: { $avg: '$rating' }, count: { $sum: 1 } } },
+    ]);
+    const average = agg?.average ? Number(agg.average.toFixed(2)) : 0;
+    const count = agg?.count || 0;
+
+    // items paginados, con datos mínimos del usuario
+    const items = await Review.find({ boatId })
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    // opcional: hidratar con nombre de usuario
+    const userIds = Array.from(new Set(items.map(r => String(r.userId)).filter(Boolean)));
+    const usersById = {};
+    if (userIds.length) {
+      const users = await User.find({ _id: { $in: userIds } }).select('firstName lastName').lean();
+      for (const u of users) {
+        usersById[String(u._id)] = u;
+      }
+    }
+    const data = items.map((r) => {
+      const u = usersById[String(r.userId)];
+      const name = u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : 'Usuario';
+      return {
+        id: String(r._id),
+        userId: String(r.userId),
+        user: name,
+        rating: r.rating,
+        comment: r.comment,
+        date: r.createdAt,
+      };
+    });
+
+    return res.json({
+      success: true,
+      data,
+      meta: { page, limit, total: count, pages: Math.ceil(count / limit || 1) },
+      summary: { average, count },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Error obteniendo reseñas', error: error.message });
+  }
+};
+
+// GET /api/boats/:id/conditions
+exports.getBoatConditions = async (req, res) => {
+  try {
+    const boat = await Boat.findById(req.params.id).lean();
+    if (!boat || !boat.isActive || boat.status !== 'approved') {
+      return res.status(404).json({ success: false, message: 'Embarcación no encontrada' });
+    }
+    const c = boat.rentalConditions || {};
+    return res.json({ success: true, data: c });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Error obteniendo condiciones de alquiler', error: error.message });
+  }
+};
+
 // PUT /api/boats/:id
 exports.updateBoat = async (req, res) => {
   try {
@@ -99,6 +170,7 @@ exports.updateBoat = async (req, res) => {
       latitude: payload.latitude !== undefined ? Number(payload.latitude) : boat.latitude,
       longitude: payload.longitude !== undefined ? Number(payload.longitude) : boat.longitude,
       addressFormatted: payload.addressFormatted !== undefined ? String(payload.addressFormatted) : boat.addressFormatted,
+      allowsFlexibleCancellation: typeof payload.allowsFlexibleCancellation === 'boolean' ? payload.allowsFlexibleCancellation : boat.allowsFlexibleCancellation,
     });
 
     // Mantener GeoJSON location sincronizado
@@ -253,6 +325,7 @@ exports.createBoat = async (req, res) => {
       longitude: Number(payload.longitude),
       addressFormatted: String(payload.addressFormatted),
       isActive: true,
+      allowsFlexibleCancellation: Boolean(payload.allowsFlexibleCancellation) || false,
     });
 
     // Asignar GeoJSON location desde lat/lng
@@ -277,7 +350,12 @@ exports.listPublicBoats = async (req, res) => {
     const sort = String(req.query.sort || 'createdAt');
     const order = String(req.query.order || 'desc').toLowerCase() === 'asc' ? 1 : -1;
 
+    // Optional filter by owner (for "otras publicaciones del propietario")
     const filter = { isActive: true, status: 'approved' };
+    if (req.query.owner) {
+      filter.ownerId = req.query.owner;
+    }
+
     const total = await Boat.countDocuments(filter);
     const items = await Boat.find(filter)
       .sort({ [sort]: order })
@@ -285,7 +363,26 @@ exports.listPublicBoats = async (req, res) => {
       .limit(limit)
       .lean();
 
-    return res.json({ success: true, data: items, meta: { page, limit, total, pages: Math.ceil(total / limit) } });
+    // Batch enrich with ownerName and ownerAvatar
+    const ownerIds = Array.from(new Set(items.map(b => String(b.ownerId)).filter(Boolean)));
+    const ownersById = {};
+    if (ownerIds.length) {
+      const owners = await User.find({ _id: { $in: ownerIds } }).select('firstName lastName avatar rating').lean();
+      for (const o of owners) {
+        ownersById[String(o._id)] = o;
+      }
+    }
+    const enriched = items.map((b) => {
+      const o = ownersById[String(b.ownerId)];
+      const first = o?.firstName || '';
+      const last = o?.lastName || '';
+      const ownerName = `${first} ${last}`.trim() || undefined;
+      const ownerAvatar = o?.avatar || undefined;
+      const ownerRating = typeof o?.rating === 'number' ? o.rating : undefined;
+      return { ...b, ownerName, ownerAvatar, ownerRating };
+    });
+
+    return res.json({ success: true, data: enriched, meta: { page, limit, total, pages: Math.ceil(total / limit) } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Error obteniendo embarcaciones', error: error.message });
   }
@@ -298,7 +395,23 @@ exports.getBoatPublic = async (req, res) => {
     if (!boat || !boat.isActive || boat.status !== 'approved') {
       return res.status(404).json({ success: false, message: 'Embarcación no encontrada' });
     }
-    return res.json({ success: true, data: boat });
+    // Enriquecer con datos del propietario
+    let ownerName;
+    let ownerRating;
+    let ownerAvatar;
+    try {
+      const owner = await User.findById(boat.ownerId).lean();
+      if (owner) {
+        const first = owner.firstName || '';
+        const last = owner.lastName || '';
+        ownerName = `${first} ${last}`.trim();
+        ownerRating = typeof owner.rating === 'number' ? owner.rating : undefined;
+        ownerAvatar = owner.avatar || undefined;
+      }
+    } catch (_) {
+      // no-op si falla lookup del usuario
+    }
+    return res.json({ success: true, data: { ...boat, ownerName, ownerRating, ownerAvatar } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Error obteniendo embarcación', error: error.message });
   }

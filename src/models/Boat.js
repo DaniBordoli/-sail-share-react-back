@@ -7,7 +7,7 @@ const BoatSchema = new mongoose.Schema(
     // Datos principales
     name: { type: String, required: true, trim: true },
     rentalTypes: { type: [String], default: [] }, // ['solo_barco','con_capitan','con_dueno']
-    area: { type: String, required: true },
+    area: { type: String },
     boatType: { type: String, required: true },
     brand: { type: String, required: true },
     model: { type: String, required: true },
@@ -22,6 +22,23 @@ const BoatSchema = new mongoose.Schema(
     priceUnit: { type: String, enum: ['day', 'week'], default: 'day' },
 
     photos: { type: [String], validate: [(arr) => arr.length > 0, 'At least one photo required'] },
+
+    // Equipamiento / comodidades (opcional)
+    amenities: { type: [String], default: [] },
+
+    // Políticas opcionales
+    allowsFlexibleCancellation: { type: Boolean, default: false },
+
+    // Condiciones de alquiler (opcional)
+    rentalConditions: {
+      cancellationPolicy: { type: String, trim: true, default: '' },
+      deposit: { type: Number, min: 0, default: 0 },
+      checkInTime: { type: String, trim: true, default: '' },
+      checkOutTime: { type: String, trim: true, default: '' },
+      licenseRequired: { type: Boolean, default: false },
+      includes: { type: [String], default: [] },
+      notIncluded: { type: [String], default: [] },
+    },
 
     // Geolocalización
     latitude: { type: Number, required: true, min: -90, max: 90 },
