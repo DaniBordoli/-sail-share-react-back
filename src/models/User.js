@@ -42,6 +42,23 @@ const UserSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // Campos de perfil extendido
+  timeZone: {
+    type: String,
+    trim: true
+  },
+  birthDate: {
+    type: Date,
+  },
+  nationality: {
+    type: String,
+    trim: true
+  },
+  languages: [{ type: String, trim: true }],
+  address: {
+    type: String,
+    trim: true
+  },
   // Avatar del usuario
   avatar: {
     type: String, // URL pública (Cloudinary)
