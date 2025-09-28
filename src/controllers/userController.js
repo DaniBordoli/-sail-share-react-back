@@ -28,7 +28,7 @@ try {
 // Registrar un nuevo usuario (con verificación por email)
 exports.registerUser = async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, password, dniOrLicense, experienceDeclaration } = req.body;
+    const { firstName, lastName, email, phone, password, dniOrLicense, experienceDeclaration, timeZone, birthDate, nationality, languages, address } = req.body;
 
     // Validaciones básicas
     if (!firstName || !lastName || !email || !phone || !password) {
@@ -54,7 +54,12 @@ exports.registerUser = async (req, res) => {
       phone,
       password,
       dniOrLicense,
-      experienceDeclaration
+      experienceDeclaration,
+      timeZone,
+      birthDate: birthDate ? new Date(birthDate) : undefined,
+      nationality,
+      languages: Array.isArray(languages) ? languages : (typeof languages === 'string' && languages.trim() ? languages.split(',').map(s => s.trim()).filter(Boolean) : undefined),
+      address
     });
 
     // Generar token de verificación
@@ -339,7 +344,7 @@ exports.getUserById = async (req, res) => {
 // Actualizar usuario
 exports.updateUser = async (req, res) => {
   try {
-    const { dniOrLicense, experienceDeclaration, firstName, lastName, phone, avatar } = req.body;
+    const { dniOrLicense, experienceDeclaration, firstName, lastName, phone, avatar, timeZone, birthDate, nationality, languages, address } = req.body;
     const userId = req.params.id;
 
     const user = await User.findById(userId);
@@ -377,6 +382,27 @@ exports.updateUser = async (req, res) => {
     }
     if (avatar !== undefined) {
       user.avatar = avatar;
+    }
+    if (timeZone !== undefined) {
+      user.timeZone = timeZone;
+    }
+    if (birthDate !== undefined) {
+      user.birthDate = birthDate ? new Date(birthDate) : undefined;
+    }
+    if (nationality !== undefined) {
+      user.nationality = nationality;
+    }
+    if (languages !== undefined) {
+      if (Array.isArray(languages)) {
+        user.languages = languages.map(String);
+      } else if (typeof languages === 'string') {
+        user.languages = languages.split(',').map(s => s.trim()).filter(Boolean);
+      } else {
+        user.languages = [];
+      }
+    }
+    if (address !== undefined) {
+      user.address = address;
     }
 
     const updatedUser = await user.save();
