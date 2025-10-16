@@ -226,3 +226,45 @@ exports.listOwnerBookings = async (req, res) => {
     return res.status(500).json({ message: 'Error listando reservas de propietario' });
   }
 };
+
+// Simular pago exitoso (solo para desarrollo/testing)
+exports.simulatePayment = async (req, res) => {
+  try {
+    if (!req.user?._id) return res.status(401).json({ message: 'No autenticado' });
+    const { id } = req.params;
+
+    const booking = await Booking.findById(id).lean();
+    if (!booking) return res.status(404).json({ message: 'Reserva no encontrada' });
+
+    // Verificar que el usuario sea el dueño de la reserva (si tiene renterId)
+    // Si no tiene renterId (reserva sin auth), permitir que cualquier usuario autenticado la confirme
+    if (booking.renterId && String(booking.renterId) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'No autorizado: esta reserva pertenece a otro usuario' });
+    }
+
+    // Solo se puede simular pago si está en pending_payment
+    if (booking.status !== 'pending_payment') {
+      return res.status(400).json({ message: 'La reserva ya fue procesada' });
+    }
+
+    // Actualizar a confirmed y asignar renterId si no lo tiene
+    const updateData = { status: 'confirmed' };
+    if (!booking.renterId) {
+      updateData.renterId = req.user._id;
+    }
+
+    const updated = await Booking.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true }
+    ).lean();
+
+    return res.json({ 
+      message: 'Pago simulado exitoso, reserva confirmada', 
+      booking: updated 
+    });
+  } catch (err) {
+    console.error('simulatePayment error', err);
+    return res.status(500).json({ message: 'Error simulando pago' });
+  }
+};
