@@ -128,7 +128,18 @@ exports.getBoatConditions = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Embarcación no encontrada' });
     }
     const c = boat.rentalConditions || {};
-    return res.json({ success: true, data: c });
+    
+    
+    const mapToFrontend = {
+      solo_barco: 'boat_only',
+      con_capitan: 'with_captain',
+      con_dueno: 'owner_onboard',
+    };
+    const allowedRentalTypes = (boat.rentalTypes || [])
+      .map(rt => mapToFrontend[rt])
+      .filter(Boolean);
+    
+    return res.json({ success: true, data: { ...c, allowedRentalTypes } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Error obteniendo condiciones de alquiler', error: error.message });
   }
